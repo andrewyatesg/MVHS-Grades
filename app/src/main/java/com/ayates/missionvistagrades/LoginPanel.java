@@ -100,7 +100,7 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
             String email = params[0];
             String password = params[1];
             //Log.d("Parent Portal", email + " : " + password);
-            int code = PORTAL.login(email, password, getApplicationContext());
+            int code = PORTAL.login(email, password);
 
             if (code == 0)
             {
@@ -120,14 +120,29 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
             ((Button) findViewById(R.id.btn_login)).setText("Login");
             passwordStorage.saveCredentials(getApplicationContext());
 
+            String msg = "";
+
             if (code == 0)
             {
                 Intent intent = new Intent(loginPanel, ClassesList.class);
                 startActivity(intent);
             }
-            else
+            else if (code == ParentPortalFetcher.INCORRECT_LOGIN)
             {
-                Toast to = Toast.makeText(loginPanel, "Couldn't connect to Parent Portal: Error code: " + code, Toast.LENGTH_SHORT);
+                msg = "Incorrect email or password";
+            }
+            else if (code == ParentPortalFetcher.NO_CONNECT)
+            {
+                msg = "There is a problem with your internet connection or the site is down";
+            }
+            else if (code == ParentPortalFetcher.SESSION_ERROR)
+            {
+                msg = "There was a strange session error... (please report this).";
+            }
+
+            if (!msg.isEmpty())
+            {
+                Toast to = Toast.makeText(loginPanel, msg, Toast.LENGTH_LONG);
                 to.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
                 to.show();
             }

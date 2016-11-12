@@ -24,13 +24,14 @@ public class ParentPortalFetcher
     public static final int INCORRECT_LOGIN = 1;
     public static final int NO_CONNECT = 2;
     public static final int SESSION_TIMEOUT = 3;
+    public static final int SESSION_ERROR = 4;
 
     private static final String SESSION_COOKIE_NAME = "ASP.NET_SessionId";
     private static final String AERIES_COOKIE_NAME = "AeriesNet";
     private static final String INCORRECT_PASSWORD_STRING = "The Username and Password entered are incorrect.";
 
-    private String sessionId;
-    private String aeriesNet;
+    private String sessionId = null;
+    private String aeriesNet = null;
 
     private List<Classroom> classes = new ArrayList<>();
 
@@ -46,7 +47,7 @@ public class ParentPortalFetcher
      * @param password used to login to parent portal
      * @return whether login was successful
      */
-    public int login(String email, String password, Context context)
+    public int login(String email, String password)
     {
         /*
         Instantiate session information
@@ -60,14 +61,23 @@ public class ParentPortalFetcher
                     "portalAccountUsername", email, "portalAccountPassword", password).cookie(SESSION_COOKIE_NAME, sessionId).method(Connection.Method.POST).execute();
             aeriesNet = res.cookie(AERIES_COOKIE_NAME);
 
-            if (!res.parse().select("span#errorMessage").text().equalsIgnoreCase(INCORRECT_PASSWORD_STRING))
+            Log.d(LoginPanel.TAG, "Just logged in with sessionId=" + sessionId + " & aeriesNet=" + aeriesNet);
+
+
+            if (res.parse().select("span#errorMessage").text().equalsIgnoreCase(INCORRECT_PASSWORD_STRING))
             {
-                return 0;
-            }
-            else
-            {
+                sessionId = null;
+                aeriesNet = null;
                 return INCORRECT_LOGIN;
             }
+            else if (sessionId == null || aeriesNet == null)
+            {
+                sessionId = null;
+                aeriesNet = null;
+                return SESSION_ERROR;
+            }
+
+            return 0;
 
         }
         catch (IOException e)
@@ -81,13 +91,13 @@ public class ParentPortalFetcher
      *
      * @return whether refresh was successful
      */
-    public int refresh(Context context)
+    public int refresh()
     {
         classes.clear();
 
         try
         {
-            return populateClasses(context);
+            return populateClasses();
         }
         catch (IOException e)
         {
@@ -108,10 +118,12 @@ public class ParentPortalFetcher
         return null;
     }
 
-    private int populateClasses(Context context) throws IOException
+    private int populateClasses() throws IOException
     {
         //Unfortunately, your Aeries session has expired due to inactivity...
-        Connection conn = Jsoup.connect("https://parents.vistausd.org/GradebookSummary.aspx").cookie(SESSION_COOKIE_NAME, sessionId).cookie(AERIES_COOKIE_NAME, aeriesNet);
+        Connection conn = Jsoup.connect("https://parents.vistausd.org/GradebookSummary.aspx").
+                cookie(SESSION_COOKIE_NAME, sessionId).
+                cookie(AERIES_COOKIE_NAME, aeriesNet);
         Document gradeBook = conn.get();
         Elements table = gradeBook.select("table#ctl00_MainContent_subGBS_tblEverything");
 
@@ -165,7 +177,7 @@ public class ParentPortalFetcher
 
                 classes.add(classroom);
             }
-            catch (ArrayIndexOutOfBoundsException | NumberFormatException | NullPointerException e1)
+            catch (ArrayIndexOutOfBoundsException | NullPointerException | NumberFormatException e1)
             {
                 Log.e(LoginPanel.TAG, "I got an error adding a classroom", e1);
             }

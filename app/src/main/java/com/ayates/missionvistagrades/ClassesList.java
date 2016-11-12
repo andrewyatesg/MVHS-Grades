@@ -26,6 +26,7 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
 {
     private SwipeRefreshLayout mSwipeContainer;
     private ListView listView;
+    private ClassListArrayAdapter classListArrayAdapter;
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
     @Override
@@ -39,6 +40,9 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
 
         listView = (ListView) findViewById(R.id.listview_classes);
         listView.setOnItemClickListener(this);
+
+        classListArrayAdapter = new ClassListArrayAdapter(this, R.layout.class_list_element, new ArrayList<Classroom>());
+        listView.setAdapter(classListArrayAdapter);
 
         new ReloadTask().execute(); //onCreate must execute a ReloadTask to update classes and the UI. Later, user can just swipe up to redo this process
     }
@@ -71,9 +75,9 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
     {
         if (code == 0) //If success
         {
-            List<Classroom> classes = PORTAL.getClasses();
-            final ClassListArrayAdapter adapter = new ClassListArrayAdapter(this, R.layout.class_list_element, classes);
-            listView.setAdapter(adapter); //Updates UI listview with class information
+            classListArrayAdapter.clear();
+            classListArrayAdapter.addAll(PORTAL.getClasses());
+            classListArrayAdapter.notifyDataSetChanged();
         }
         else if (code == ParentPortalFetcher.SESSION_TIMEOUT) //If the session has timed out, login and obtain a new session ID
         {
@@ -111,6 +115,10 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         {
             Log.d(LoginPanel.TAG, "Login was unsuccessful (due to connection issues) after failed attempt at reload."); //A connection error, user can retry after client and/or server issue is resolved
         }
+        else if (code == ParentPortalFetcher.SESSION_ERROR)
+        {
+            Log.d(LoginPanel.TAG, "Login was unsuccessful (due to some weird unresolved session error) after failed attempt at reload."); //A connection error, user can retry after client and/or server issue is resolved
+        }
     }
 
     private class LoginTask extends AsyncTask<String, Integer, Integer>
@@ -132,7 +140,7 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
             String pass = LoginPanel.passwordStorage.getPassword();
 
             PORTAL = new ParentPortalFetcher();
-            return PORTAL.login(usr, pass, getApplicationContext());
+            return PORTAL.login(usr, pass);
         }
 
         @Override
@@ -163,7 +171,7 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         @Override
         protected Integer doInBackground(String... params)
         {
-            return PORTAL.refresh(getApplicationContext());
+            return PORTAL.refresh();
         }
 
         @Override
@@ -200,9 +208,11 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
 
             TextView grade = (TextView) rowView.findViewById(R.id.grade);
             TextView name = (TextView) rowView.findViewById(R.id.name);
+            TextView avg = (TextView) rowView.findViewById(R.id.avg);
 
             grade.setText(values.get(pos).getMark());
             name.setText(values.get(pos).getName());
+            avg.setText(values.get(pos).getPercent() + "%");
 
             return rowView;
         }

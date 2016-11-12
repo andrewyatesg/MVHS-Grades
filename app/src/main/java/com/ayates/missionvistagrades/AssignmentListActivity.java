@@ -32,10 +32,9 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
         listView = (ListView) findViewById(R.id.listview_assignments);
         listView.setOnItemClickListener(this);
 
-        classroom = LoginPanel.PORTAL.getClassroom(getIntent().getExtras().getInt("Classroom"));
-
-        if (classroom != null)
+        if (getIntent().hasExtra("Classroom"))
         {
+            classroom = LoginPanel.PORTAL.getClassroom(getIntent().getExtras().getInt("Classroom"));
             ((TextView) findViewById(R.id.class_name)).setText(classroom.getName());
             ((TextView) findViewById(R.id.class_mark)).setText(classroom.getMark());
             ((TextView) findViewById(R.id.class_percent)).setText("" + classroom.getPercent());
@@ -94,6 +93,14 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
             if (!assignment.isSubmitted())
             {
                 int c = Color.parseColor("#c9c9c9");
+                title.setTextColor(c);
+                category.setTextColor(c);
+                score.setTextColor(c);
+                percent.setTextColor(c);
+            }
+            else if (assignment.getScore() == 0)
+            {
+                int c = Color.parseColor("#FF0000");
                 title.setTextColor(c);
                 category.setTextColor(c);
                 score.setTextColor(c);
