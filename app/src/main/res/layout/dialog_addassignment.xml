@@ -2,20 +2,62 @@
               android:orientation="vertical"
               android:layout_width="wrap_content"
               android:layout_height="wrap_content">
-    <EditText
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:weightSum="2"
+            android:id="@+id/dummy1"
+            android:layout_alignParentLeft="true"
+            android:layout_centerHorizontal="true"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+        <EditText
             android:id="@+id/addassignment"
             android:inputType="text"
-            android:layout_width="match_parent"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:layout_marginLeft="4dp"
             android:layout_marginRight="4dp"
+            android:layout_centerHorizontal="true"
             android:fontFamily="sans-serif"
-            android:hint="Mock"/>
+            android:hint="Assignment Name"
+            android:ellipsize="start"
+            android:gravity="center_horizontal"
+            android:layout_weight="1"/>
+
+    </LinearLayout>
+
     <EditText
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:inputType="number"
-            android:ems="2"
-            android:id="@+id/addassignment_maxScore" android:layout_below="@id/addassignment" android:layout_centerHorizontal="true"/>
+            android:ems="3"
+            android:ellipsize="start"
+            android:gravity="center_horizontal"
+            android:id="@+id/addassignment_score" android:layout_below="@id/dummy1" android:layout_centerHorizontal="true"
+            android:layout_marginTop="4dp"
+            android:layout_marginLeft="4dp"
+            android:layout_marginRight="4dp"
+            android:hint="Score"/>
+    <EditText
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:ems="3"
+            android:ellipsize="start"
+            android:gravity="center_horizontal"
+            android:id="@+id/addassignment_maxScore" android:layout_below="@id/addassignment_score" android:layout_centerHorizontal="true"
+            android:layout_marginTop="4dp"
+            android:layout_marginLeft="4dp"
+            android:layout_marginRight="4dp"
+            android:hint="Max"/>
+    <Spinner
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/categories_spinner" android:layout_below="@id/addassignment_maxScore" android:layout_centerHorizontal="true"
+            android:layout_marginTop="4dp"
+            android:layout_marginLeft="4dp"
+            android:layout_marginRight="4dp"/>
 </RelativeLayout>

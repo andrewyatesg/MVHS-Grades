@@ -15,5 +15,5 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
--keepattributes Exceptions,Signature,Deprecated,SourceFile,SourceDir,LineNumberTable,Synthetic,RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,RuntimeVisibleParameterAnnotations,RuntimeInvisibleParameterAnnotations,AnnotationDefault,InnerClasses,*Annotation*
+-keepattributes Deprecated,SourceFile,SourceDir,LineNumberTable,RuntimeInvisibleParameterAnnotations,AnnotationDefault,*Annotation*
 -keep class org.jsoup.** { *; }

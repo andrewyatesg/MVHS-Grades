@@ -23,6 +23,8 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
 
     public LoginPanel loginPanel;
 
+    public LoginTask loginTask;
+
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
@@ -42,6 +44,8 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
         passwordStorage.loadCredentials(getApplicationContext());
         emailText.setText(passwordStorage.getUsername());
         passwordText.setText(passwordStorage.getPassword());
+
+        loginTask = new LoginTask();
 
         if (!emailText.getText().toString().isEmpty() && !passwordText.getText().toString().isEmpty()) login();
     }
@@ -76,12 +80,18 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
 
     public void login()
     {
+        if (loginTask.getStatus() == AsyncTask.Status.RUNNING)
+        {
+            return;
+        }
+
         String email = emailText.getText().toString();
         String password = passwordText.getText().toString();
 
         passwordStorage.setUsername("").setPassword("");
 
-        new LoginTask().execute(email, password);
+        loginTask = new LoginTask();
+        loginTask.execute(email, password);
     }
 
     class LoginTask extends AsyncTask<String, Integer, Integer>
@@ -99,7 +109,13 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
         {
             String email = params[0];
             String password = params[1];
-            //Log.d("Parent Portal", email + " : " + password);
+
+            if (PORTAL == null)
+            {
+                Log.d(TAG, "ParentPortalFetcher is null!");
+                return 666;
+            }
+
             int code = PORTAL.login(email, password);
 
             if (code == 0)
@@ -138,6 +154,10 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
             else if (code == ParentPortalFetcher.SESSION_ERROR)
             {
                 msg = "There was a strange session error... (please report this).";
+            }
+            else if (code == 666)
+            {
+                msg = "This is the strange NULL error, please report it.";
             }
 
             if (!msg.isEmpty())
