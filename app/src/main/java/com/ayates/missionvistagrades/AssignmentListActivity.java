@@ -14,13 +14,15 @@ import android.widget.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class AssignmentListActivity extends Activity implements AdapterView.OnItemClickListener, View.OnClickListener, CompoundButton.OnCheckedChangeListener, AddAssignmentFragment.AddAssignmentListener
+public class AssignmentListActivity extends Activity implements AdapterView.OnItemClickListener, View.OnClickListener, CompoundButton.OnCheckedChangeListener, AddAssignmentFragment.AddAssignmentListener, SeekBar.OnSeekBarChangeListener
 {
     private ListView listView;
     private Button addMockButton;
 
     public Classroom classroom;
+    public boolean mockEnabled;
     private List<Assignment> mockAssignments = new ArrayList<>();
+    private List<AssignmentEditProfile> editedAssignments = new ArrayList<>();
 
     private AssignmentListAdapter adapter;
 
@@ -49,8 +51,12 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
         {
             classroom = LoginPanel.PORTAL.getClassroom(getIntent().getExtras().getInt("Classroom"));
             updateClassroomInfoOnUI();
+
             adapter = new AssignmentListAdapter(this, R.layout.assignment_list_element, classroom.getAssignmentList());
+            adapter.setNotifyOnChange(false);
+
             listView.setAdapter(adapter);
+            listView.setOnItemClickListener(this);
         }
         else
         {
@@ -61,7 +67,32 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id)
     {
+        if (mockEnabled)
+        {
+            disableEditForAll();
 
+            Assignment a = classroom.getAssignmentList().get(classroom.getAssignmentList().size() - position - 1);
+
+            if (!hasBeenEdited(classroom.getAssignmentList().get(classroom.getAssignmentList().size() - position - 1)))
+            {
+                editedAssignments.add(new AssignmentEditProfile(a, a.getScore(), a.isSubmitted()));
+            }
+
+            if (!a.isSubmitted())
+            {
+                a.setSubmitted(true);
+                a.setScore(a.getMaxScore());
+            }
+
+            a.setEditing(true);
+
+            classroom.recalculateGrades();
+
+            adapter.notifyDataSetChanged();
+            updateClassroomInfoOnUI();
+
+            Log.d(LoginPanel.TAG, classroom.getAssignmentList().get(position).getName() + " has been clicked.");
+        }
     }
 
     @Override
@@ -82,13 +113,21 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
             if (isChecked)
             {
                 addMockAssignmentButton();
+                mockEnabled = true;
             }
             else
             {
                 classroom.getAssignmentList().removeAll(mockAssignments);
+                restoreDefaultAssignments();
+
                 classroom.recalculateGrades();
+
                 updateClassroomInfoOnUI();
                 removeMockAssignmentButton();
+                disableEditForAll();
+                adapter.notifyDataSetChanged();
+
+                mockEnabled = false;
             }
         }
     }
@@ -97,8 +136,10 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
     public void onBackPressed()
     {
         classroom.getAssignmentList().removeAll(mockAssignments); //Remove all mock assignments
+        restoreDefaultAssignments();
+
         classroom.recalculateGrades(); //Reset grades to original
-        //Log.d(LoginPanel.TAG, "Back button pressed in AssignmentListActivity. Reset assignment list, recalculated grades, and destroying activity...");
+
         super.onBackPressed();
         finish();
     }
@@ -115,10 +156,56 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
             scoreF = Float.parseFloat(score);
             maxScoreF = Float.parseFloat(maxScore);
         }
-        catch (NumberFormatException e) {}
+        catch (NumberFormatException e)
+        {
+        }
 
         Assignment mock = new Assignment("MOCK: " + name, category, scoreF, maxScoreF, scoreF / maxScoreF * 100, true);
         addMockAssignment(mock);
+    }
+
+    @Override
+    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser)
+    {
+        if (!mockEnabled) return;
+
+        Assignment a = getEditedAssignment();
+        a.setScore(progress);
+
+        classroom.recalculateGrades();
+
+        View v = getEditedAssignmentView();
+
+        if (v != null)
+        {
+            TextView score = (TextView) v.findViewById(R.id.score);
+            TextView percentage = (TextView) v.findViewById(R.id.percentage);
+            Log.d(LoginPanel.TAG, "Original " + score.getText() + ", " + percentage.getText());
+            score.setText(a.getScore() + " / " + a.getMaxScore());
+            percentage.setText("" + a.getPercentage() + "%");
+            Log.d(LoginPanel.TAG, "Final " + score.getText() + ", " + percentage.getText());
+        }
+        else
+        {
+            Log.d(LoginPanel.TAG, "ViewGroup of edited assignment is null so can't update progress in real time.");
+        }
+
+        updateClassroomInfoOnUI();
+    }
+
+    @Override
+    public void onStartTrackingTouch(SeekBar seekBar)
+    {
+
+    }
+
+    @Override
+    public void onStopTrackingTouch(SeekBar seekBar)
+    {
+        classroom.recalculateGrades();
+
+        adapter.notifyDataSetChanged();
+        updateClassroomInfoOnUI();
     }
 
     private void addMockAssignment(Assignment a)
@@ -127,9 +214,7 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
         classroom.addAssignment(a);
         classroom.recalculateGrades();
 
-        adapter.insert(a, 0);
         adapter.notifyDataSetChanged();
-
         updateClassroomInfoOnUI();
 
         Log.d(LoginPanel.TAG, "Added mock assignment '" + a.getName() + "' with category '" + a.getCategory() + "' and percentage " + a.getPercentage());
@@ -164,6 +249,83 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
         p.addRule(RelativeLayout.BELOW, R.id.class_percent);
     }
 
+    private void disableEditForAll()
+    {
+        for (Assignment a : classroom.getAssignmentList())
+        {
+            a.setEditing(false);
+        }
+    }
+
+    private Assignment getEditedAssignment()
+    {
+        for (Assignment a : classroom.getAssignmentList())
+        {
+            if (a.isEditing()) return a;
+        }
+
+        return null;
+    }
+
+    private View getEditedAssignmentView()
+    {
+        for (int i = 0; i < adapter.values.size(); i++)
+        {
+            if (adapter.values.get(i).isEditing())
+            {
+                return getViewByPosition(adapter.values.size() - i - 1, listView);
+            }
+        }
+
+        return null;
+    }
+
+    private void restoreDefaultAssignments()
+    {
+        for (AssignmentEditProfile a : editedAssignments)
+        {
+            a.getA().setScore(a.getOriginalScore());
+            a.getA().setSubmitted(a.isWasSubmitted());
+            a.getA().setEditing(false);
+            Log.d(LoginPanel.TAG, "Restore: " + a.getOriginalScore() + ", " + a.isWasSubmitted() + ", ");
+        }
+
+        editedAssignments.clear();
+    }
+
+    private void updateItemAtPosition(int position)
+    {
+        int visiblePosition = listView.getFirstVisiblePosition();
+        View view = listView.getChildAt(position - visiblePosition);
+        listView.getAdapter().getView(position, view, listView);
+    }
+
+    private View getViewByPosition(int pos, ListView listView)
+    {
+        final int firstListItemPosition = listView.getFirstVisiblePosition();
+        final int lastListItemPosition = firstListItemPosition + listView.getChildCount() - 1;
+
+        if (pos < firstListItemPosition || pos > lastListItemPosition)
+        {
+            return listView.getAdapter().getView(pos, null, listView);
+        }
+        else
+        {
+            final int childIndex = pos - firstListItemPosition;
+            return listView.getChildAt(childIndex);
+        }
+    }
+
+    private boolean hasBeenEdited(Assignment a)
+    {
+        for (AssignmentEditProfile assignmentEditProfile : editedAssignments)
+        {
+            if (assignmentEditProfile.getA() == a) return true;
+        }
+
+        return false;
+    }
+
     private class AssignmentListAdapter extends ArrayAdapter<Assignment>
     {
 
@@ -183,7 +345,7 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
             LayoutInflater inflater = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             View rowView = inflater.inflate(R.layout.assignment_list_element, parent, false);
 
-            Assignment assignment = values.get(pos);
+            Assignment assignment = values.get(values.size() - pos - 1);
 
             TextView title = (TextView) rowView.findViewById(R.id.title);
             TextView category = (TextView) rowView.findViewById(R.id.category);
@@ -205,6 +367,20 @@ public class AssignmentListActivity extends Activity implements AdapterView.OnIt
                 category.setTextColor(c);
                 score.setTextColor(c);
                 percent.setTextColor(c);
+            }
+
+            if (assignment.isEditing())
+            {
+                SeekBar seekBar = new SeekBar(AssignmentListActivity.this);
+                RelativeLayout.LayoutParams p = new RelativeLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                p.addRule(RelativeLayout.BELOW, R.id.category);
+                p.addRule(RelativeLayout.CENTER_HORIZONTAL);
+                seekBar.setLayoutParams(p);
+                seekBar.setProgress((int) assignment.getScore());
+                seekBar.setMax((int) assignment.getMaxScore());
+                seekBar.setMinimumHeight(6);
+                seekBar.setOnSeekBarChangeListener(AssignmentListActivity.this);
+                ((ViewGroup) rowView).addView(seekBar);
             }
 
             category.setText(assignment.getCategory());

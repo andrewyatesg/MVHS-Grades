@@ -25,15 +25,18 @@ public class ParentPortalFetcher
     public static final int NO_CONNECT = 2;
     public static final int SESSION_TIMEOUT = 3;
     public static final int SESSION_ERROR = 4;
+    public static final int NO_STUDENTS = 5;
 
+    private static final String ROOT_URL = "https://parents.vistausd.org/";
     private static final String SESSION_COOKIE_NAME = "ASP.NET_SessionId";
     private static final String AERIES_COOKIE_NAME = "AeriesNet";
     private static final String INCORRECT_PASSWORD_STRING = "The Username and Password entered are incorrect.";
 
     private String sessionId = null;
-    private String aeriesNet = null;
+    private String aeriesNet = null; //Encodes information about current student selected
 
     private List<Classroom> classes = new ArrayList<>();
+    private List<String> students = new ArrayList<>();
 
     public ParentPortalFetcher()
     {
@@ -54,15 +57,16 @@ public class ParentPortalFetcher
          */
         try
         {
-            Connection.Response res = Jsoup.connect("https://parents.vistausd.org").execute();
+            Connection.Response res = Jsoup.connect(ROOT_URL + "LoginParent.aspx").execute();
             sessionId = res.cookie(SESSION_COOKIE_NAME);
 
-            res = Jsoup.connect("https://parents.vistausd.org/LoginParent.aspx").data("checkCookiesEnabled", "true", "checkMobileDevice", "false", "checkStandaloneMode", "false",
-                    "portalAccountUsername", email, "portalAccountPassword", password).cookie(SESSION_COOKIE_NAME, sessionId).method(Connection.Method.POST).execute();
+            res = Jsoup.connect(ROOT_URL + "LoginParent.aspx")
+                    .userAgent("Mozilla")
+                    .data("checkMobileDevice", "false", "checkStandaloneMode", "false", "checkTabletDevice", "false", "portalAccountUsername", email, "portalAccountPassword", password)
+                    .cookie(SESSION_COOKIE_NAME, sessionId)
+                    .method(Connection.Method.POST)
+                    .execute();
             aeriesNet = res.cookie(AERIES_COOKIE_NAME);
-
-            Log.d(LoginPanel.TAG, "Just logged in with sessionId=" + sessionId + " & aeriesNet=" + aeriesNet);
-
 
             if (res.parse().select("span#errorMessage").text().equalsIgnoreCase(INCORRECT_PASSWORD_STRING))
             {
@@ -77,6 +81,31 @@ public class ParentPortalFetcher
                 return SESSION_ERROR;
             }
 
+            students = getAllStudents();
+
+            if (students.isEmpty())
+            {
+                Log.d(LoginPanel.TAG, "When logging in, couldn't find any students so stopping and setting all values to null.");
+                sessionId = null;
+                aeriesNet = null;
+                return NO_STUDENTS;
+            }
+
+            int pos = getFirstHighschoolStudent();
+
+            if (pos >= 0)
+            {
+                int code = changeStudent(pos); //Changes current student to first high school student
+                Log.d(LoginPanel.TAG, "Changing student with code " + code + ".");
+            }
+            else
+            {
+                Log.d(LoginPanel.TAG, "There was a problem getting the first high school student! No students were found.");
+                sessionId = null;
+                aeriesNet = null;
+                return NO_STUDENTS;
+            }
+
             return 0;
 
         }
@@ -87,12 +116,18 @@ public class ParentPortalFetcher
     }
 
     /**
-     * Resets all classrooms with parent portal information. Undoes all MOCK assignments.
+     * Resets all classrooms with parent portal information. Undoes all MOCK assignments (but you shouldn't use this method only for that purpose).
      *
      * @return whether refresh was successful
      */
     public int refresh()
     {
+        if (sessionId == null || aeriesNet == null)
+        {
+            Log.d(LoginPanel.TAG, "Session cookies are null during refresh, so stopping.");
+            return SESSION_ERROR;
+        }
+
         classes.clear();
 
         try
@@ -118,25 +153,129 @@ public class ParentPortalFetcher
         return null;
     }
 
+    /**
+     * Changes student profile to student at position (pos) on Parent Portal
+     *
+     * @param pos
+     * @return
+     */
+    public int changeStudent(int pos) //TODO: Handle session timeouts
+    {
+        try
+        {
+            Connection conn = Jsoup.connect(ROOT_URL + "default.aspx").
+                    cookie(SESSION_COOKIE_NAME, sessionId).
+                    cookie(AERIES_COOKIE_NAME, aeriesNet);
+            Document doc = conn.get();
+
+            Element e = doc.getElementById("Sub_7");
+            if (e == null) return SESSION_TIMEOUT;
+            Elements e1 = e.children();
+            if (e1.isEmpty()) return SESSION_TIMEOUT;
+
+            String link = ROOT_URL + e1.get(pos).attr("href");
+            Connection.Response res = Jsoup.connect(link)
+                    .cookie(SESSION_COOKIE_NAME, sessionId)
+                    .cookie(AERIES_COOKIE_NAME, aeriesNet)
+                    .execute();
+            aeriesNet = res.cookie(AERIES_COOKIE_NAME);
+
+            if (aeriesNet == null) return SESSION_TIMEOUT;
+
+            Log.d(LoginPanel.TAG, "Changed student to: " + aeriesNet);
+        }
+        catch (IOException e)
+        {
+            return NO_CONNECT;
+        }
+        catch (ArrayIndexOutOfBoundsException e)
+        {
+            Log.e(LoginPanel.TAG, "Out of bounds exception in changeStudent", e);
+            return NO_STUDENTS;
+        }
+        catch (NullPointerException e)
+        {
+            Log.e(LoginPanel.TAG, "Null pointer exception in changeStudent", e);
+            return NO_STUDENTS;
+        }
+
+        return 0;
+    }
+
+    /**
+     * Retrieves a list of all students
+     * @return
+     */
+    private List<String> getAllStudents()
+    {
+        try
+        {
+            List<String> list = new ArrayList<>();
+
+            Connection conn = Jsoup.connect(ROOT_URL + "default.aspx").
+                    cookie(SESSION_COOKIE_NAME, sessionId).
+                    cookie(AERIES_COOKIE_NAME, aeriesNet);
+            Document doc = conn.get();
+
+            Element e = doc.getElementById("Sub_7");
+            Elements e1 = e.children();
+            int size = e1.size() - 1; //Subtracting 1 b/c of the "Add New Student" list element which we do not count
+
+            for (int i = 0; i < size; i++)
+            {
+                Element c = e1.get(i);
+                list.add(c.html());
+            }
+
+            return list;
+        }
+        catch (Exception e)
+        {
+            return new ArrayList<>();
+        }
+    }
+
+    private int getFirstHighschoolStudent()
+    {
+        for (int i = 0; i < students.size(); i++)
+        {
+            if (students.get(i).contains("Grd 9") || students.get(i).contains("Grd 10") || students.get(i).contains("Grd 11") || students.get(i).contains("Grd 12"))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private int populateClasses() throws IOException
     {
         //Unfortunately, your Aeries session has expired due to inactivity...
-        Connection conn = Jsoup.connect("https://parents.vistausd.org/GradebookSummary.aspx").
-                cookie(SESSION_COOKIE_NAME, sessionId).
-                cookie(AERIES_COOKIE_NAME, aeriesNet);
+        Connection conn = Jsoup.connect(ROOT_URL + "GradebookSummary.aspx")
+                .cookie(SESSION_COOKIE_NAME, sessionId)
+                .cookie(AERIES_COOKIE_NAME, aeriesNet);
         Document gradeBook = conn.get();
         Elements table = gradeBook.select("table#ctl00_MainContent_subGBS_tblEverything");
 
         if (table.size() <= 0) return SESSION_TIMEOUT;
 
-        Element e = table.select("tr[id*='trPriorTermHeading']").first();
-        int rowNum = Integer.parseInt(e.id().split("_")[4].substring(3));
+        int a = 0;
+        Elements e = table.select("tr[id*='trPriorTermHeading']");
+        e.addAll(table.select("tr[id*='trFutureTermHeading']"));
+        if (e.isEmpty())
+        {
+            a = table.select("tr[id*='ctl00_MainContent_subGBS_DataDetails']").size() - 1;
+        }
+        else
+        {
+            a = Integer.parseInt(e.first().id().split("_")[4].substring(3));
+        }
 
-        Document defaultPage = Jsoup.connect("https://parents.vistausd.org/GradebookDetails.aspx").cookie(SESSION_COOKIE_NAME, sessionId).cookie(AERIES_COOKIE_NAME, aeriesNet).get();
+        Document defaultPage = Jsoup.connect(ROOT_URL + "GradebookDetails.aspx").cookie(SESSION_COOKIE_NAME, sessionId).cookie(AERIES_COOKIE_NAME, aeriesNet).get();
         Elements ids = defaultPage.select("#ctl00_MainContent_subGBS_dlGN").first().select("option:not(option:contains(<<))");
         //Log.d(LoginPanel.TAG, "Step 1 of this looooooooong process.");
 
-        for (int i = 1; i < rowNum; i++)
+        for (int i = 1; i < a; i++)
         {
             try
             {
@@ -157,7 +296,7 @@ public class ParentPortalFetcher
 
                 Classroom classroom = new Classroom(classTitle, teacher, period, percent, mark, lastUpdated, id, term); //Classroom object
 
-                Document assignments = Jsoup.connect("https://parents.vistausd.org/Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=" + classroom.getId() + "&Term=" + classroom.getTerm())
+                Document assignments = Jsoup.connect(ROOT_URL + "Widgets/ClassSummary/RedirectToGradebook?GradebookNumber=" + classroom.getId() + "&Term=" + classroom.getTerm())
                         .cookie(SESSION_COOKIE_NAME, sessionId).cookie(AERIES_COOKIE_NAME, aeriesNet).get(); //Scraping class assignment page from parent portal
                 boolean classWeighted = assignments.select("td[id*='tdPctOfGrade']").size() > 0;
 
@@ -173,9 +312,9 @@ public class ParentPortalFetcher
                     }
                 }
 
-                populateAssignments(classroom, assignments);
-
                 classes.add(classroom);
+
+                populateAssignments(classroom, assignments);
             }
             catch (ArrayIndexOutOfBoundsException | NullPointerException | NumberFormatException e1)
             {
@@ -238,6 +377,11 @@ public class ParentPortalFetcher
     public List<Classroom> getClasses()
     {
         return classes;
+    }
+
+    public List<String> getStudents()
+    {
+        return students;
     }
 
     /**

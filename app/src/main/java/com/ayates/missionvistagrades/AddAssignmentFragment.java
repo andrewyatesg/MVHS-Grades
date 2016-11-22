@@ -40,7 +40,7 @@ public class AddAssignmentFragment extends DialogFragment
         }
         else
         {
-            ArrayAdapter<String> categoriesAdapter = new ArrayAdapter<>(view.getContext(), android.R.layout.simple_spinner_item, classroom.getCategoriesMap().keySet().toArray(new String[classroom.getCategoriesMap().keySet().size()]));
+            ArrayAdapter<String> categoriesAdapter = new ArrayAdapter<>(view.getContext(), android.R.layout.simple_spinner_item, classroom.getDisplayCategories());
             categoriesAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spinner.setAdapter(categoriesAdapter);
         }
@@ -54,7 +54,7 @@ public class AddAssignmentFragment extends DialogFragment
                     {
                         addAssignmentListener.onDialogPositiveClick(AddAssignmentFragment.this, ((EditText) view.findViewById(R.id.addassignment)).getText().toString(),
                                 (((EditText) view.findViewById(R.id.addassignment_score)).getText().toString()), (((EditText) view.findViewById(R.id.addassignment_maxScore)).getText().toString()),
-                                weighted ? spinner.getSelectedItem().toString() : "");
+                                weighted ? spinner.getSelectedItem().toString().split(" \\(")[0] : "");
                     }
                 })
                 .setNegativeButton("Cancel", new DialogInterface.OnClickListener()

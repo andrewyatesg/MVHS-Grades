@@ -232,10 +232,21 @@ public class Classroom
         return used;
     }
 
-    private float roundFloat(float x)
+    public List<String> getDisplayCategories()
+    {
+        List<String> a = new ArrayList<>();
+        for (int i = 0; i < categories.size(); i++)
+        {
+            a.add(categories.keySet().toArray()[i] + " (" + categories.values().toArray()[i] + "%)");
+        }
+
+        return a;
+    }
+
+    public static float roundFloat(float x)
     {
         DecimalFormat df = new DecimalFormat("#.##");
-        df.setRoundingMode(RoundingMode.CEILING);
+        df.setRoundingMode(RoundingMode.HALF_UP);
         return Float.valueOf(df.format(x));
     }
 }

@@ -12,6 +12,8 @@ public class Assignment
     private float percentage;
     private boolean submitted;
 
+    private boolean isEditing;
+
     public Assignment(String name, String category, float score, float maxScore, float percentage, boolean submitted)
     {
         this.name = name;
@@ -20,6 +22,7 @@ public class Assignment
         this.maxScore = maxScore;
         this.percentage = percentage;
         this.submitted = submitted;
+        this.isEditing = false;
     }
 
     public String getName() {
@@ -44,6 +47,7 @@ public class Assignment
 
     public void setScore(float score) {
         this.score = score;
+        this.percentage = Classroom.roundFloat(score / maxScore * 100);
     }
 
     public float getMaxScore() {
@@ -64,5 +68,20 @@ public class Assignment
 
     public boolean isSubmitted() {
         return submitted;
+    }
+
+    public boolean isEditing()
+    {
+        return isEditing;
+    }
+
+    public void setEditing(boolean editing)
+    {
+        isEditing = editing;
+    }
+
+    public void setSubmitted(boolean submitted)
+    {
+        this.submitted = submitted;
     }
 }

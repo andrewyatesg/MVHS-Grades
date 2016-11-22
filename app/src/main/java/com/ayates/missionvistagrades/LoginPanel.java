@@ -155,9 +155,9 @@ public class LoginPanel extends AppCompatActivity implements View.OnClickListene
             {
                 msg = "There was a strange session error... (please report this).";
             }
-            else if (code == 666)
+            else if (code == ParentPortalFetcher.NO_STUDENTS)
             {
-                msg = "This is the strange NULL error, please report it.";
+                msg = "Unfortunately, we couldn't find any high school students on this account. If this is an error, please try again.";
             }
 
             if (!msg.isEmpty())

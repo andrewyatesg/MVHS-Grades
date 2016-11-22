@@ -2,6 +2,7 @@ package com.ayates.missionvistagrades;
 
 import android.annotation.TargetApi;
 import android.app.Activity;
+import android.app.DialogFragment;
 import android.content.Context;
 import android.content.Intent;
 import android.os.AsyncTask;
@@ -22,7 +23,7 @@ import java.util.List;
 
 import static com.ayates.missionvistagrades.LoginPanel.PORTAL;
 
-public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener
+public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefreshListener, AdapterView.OnItemClickListener, ChangeStudentFragment.ChangeStudentListener
 {
     private SwipeRefreshLayout mSwipeContainer;
     private ListView listView;
@@ -41,8 +42,18 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         listView = (ListView) findViewById(R.id.listview_classes);
         listView.setOnItemClickListener(this);
 
-        classListArrayAdapter = new ClassListArrayAdapter(this, R.layout.class_list_element, new ArrayList<Classroom>());
+        classListArrayAdapter = new ClassListArrayAdapter(this, R.layout.class_list_element, LoginPanel.PORTAL.getClasses());
         listView.setAdapter(classListArrayAdapter);
+
+        findViewById(R.id.change_student).setOnClickListener(new View.OnClickListener()
+        {
+            @Override
+            public void onClick(View v)
+            {
+                DialogFragment dialogFragment = new ChangeStudentFragment();
+                dialogFragment.show(getFragmentManager(), "ChangeStudentFragment");
+            }
+        });
 
         new ReloadTask().execute(); //onCreate must execute a ReloadTask to update classes and the UI. Later, user can just swipe up to redo this process
     }
@@ -51,7 +62,7 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
     public void onRefresh()
     {
         new ReloadTask().execute();
-        Log.d(LoginPanel.TAG, "Refresh has been called");
+        Log.d(LoginPanel.TAG, "Refresh has been called by swiping.");
     }
 
     @Override
@@ -66,6 +77,56 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         Log.d(LoginPanel.TAG, "\"" + classroom.getName() + "\" has been clicked in listview.");
     }
 
+    @Override
+    public void onDialogPositiveClick(DialogFragment dialog, int pos)
+    {
+        if (pos >= 0)
+        {
+            if (LoginPanel.PORTAL.getStudents().get(pos).contains("Grd 9") || LoginPanel.PORTAL.getStudents().get(pos).contains("Grd 10") || LoginPanel.PORTAL.getStudents().get(pos).contains("Grd 11") || LoginPanel.PORTAL.getStudents().get(pos).contains("Grd 12"))
+            {
+                Toast toast = Toast.makeText(this, "Changing student...", Toast.LENGTH_LONG);
+                toast.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
+                toast.show();
+                new ChangeStudentTask().execute(pos);
+            }
+            else
+            {
+                Toast toast = Toast.makeText(this, "Cannot change to a non high-school student.", Toast.LENGTH_LONG);
+                toast.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
+                toast.show();
+            }
+        }
+        else
+        {
+            Log.d(LoginPanel.TAG, "There was a problem changing students. Out of bounds error.");
+        }
+    }
+
+    public void onFinishChangeStudent(int code)
+    {
+        if (code == 0)
+        {
+            new ReloadTask().execute();
+        }
+        else if (code == ParentPortalFetcher.NO_CONNECT)
+        {
+            Toast toast = Toast.makeText(this, "There was a connection error so we couldn't change students.", Toast.LENGTH_LONG);
+            toast.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
+            toast.show();
+        }
+        else if (code == ParentPortalFetcher.NO_STUDENTS)
+        {
+            Toast toast = Toast.makeText(this, "No high school students were found with that name.", Toast.LENGTH_LONG);
+            toast.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
+            toast.show();
+        }
+        else if (code == ParentPortalFetcher.SESSION_TIMEOUT)
+        {
+            Log.d(LoginPanel.TAG, "Session timeout onFinishChangeStudent so logging in again.");
+            new LoginTask().execute();
+        }
+    }
+
     /**
      * This method is called from ReloadTask after finished execution.
      *
@@ -75,13 +136,20 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
     {
         if (code == 0) //If success
         {
-            classListArrayAdapter.clear();
-            classListArrayAdapter.addAll(PORTAL.getClasses());
+            //classListArrayAdapter.clear();
+            //classListArrayAdapter.addAll(PORTAL.getClasses());
             classListArrayAdapter.notifyDataSetChanged();
+            Log.d(LoginPanel.TAG, classListArrayAdapter.values.size() + "");
         }
         else if (code == ParentPortalFetcher.SESSION_TIMEOUT) //If the session has timed out, login and obtain a new session ID
         {
             new LoginTask().execute(); //Executes a login in separate thread
+        }
+        else if (code == ParentPortalFetcher.SESSION_ERROR)
+        {
+            Toast toast = Toast.makeText(this, "Session error. Please restart the app.", Toast.LENGTH_LONG);
+            toast.setGravity(Gravity.CENTER_VERTICAL, 0, 0);
+            toast.show();
         }
         else if (code == ParentPortalFetcher.NO_CONNECT)
         {
@@ -118,6 +186,28 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         else if (code == ParentPortalFetcher.SESSION_ERROR)
         {
             Log.d(LoginPanel.TAG, "Login was unsuccessful (due to some weird unresolved session error) after failed attempt at reload."); //A connection error, user can retry after client and/or server issue is resolved
+        }
+        else if (code == ParentPortalFetcher.NO_STUDENTS)
+        {
+            Log.d(LoginPanel.TAG, "Login was unsuccessful (due to not finding any students) after failed attempt at reload."); //A connection error, user can retry after client and/or server issue is resolved
+        }
+    }
+
+    private class ChangeStudentTask extends AsyncTask<Integer, Integer, Integer>
+    {
+
+        @Override
+        protected Integer doInBackground(Integer... params)
+        {
+            return LoginPanel.PORTAL.changeStudent(params[0]);
+        }
+
+        @Override
+        protected void onPostExecute(Integer code)
+        {
+            super.onPostExecute(code);
+
+            onFinishChangeStudent(code);
         }
     }
 
@@ -163,7 +253,14 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         {
             super.onPreExecute();
 
-            mSwipeContainer.setRefreshing(true);
+            mSwipeContainer.post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    mSwipeContainer.setRefreshing(true);
+                }
+            });
 
             Log.d(LoginPanel.TAG, "Refreshing class list.");
         }
@@ -179,7 +276,14 @@ public class ClassesList extends Activity implements SwipeRefreshLayout.OnRefres
         {
             super.onPostExecute(code);
 
-            mSwipeContainer.setRefreshing(false);
+            mSwipeContainer.post(new Runnable()
+            {
+                @Override
+                public void run()
+                {
+                    mSwipeContainer.setRefreshing(false);
+                }
+            });
 
             Log.d(LoginPanel.TAG, "Refreshing class list finished with code=" + code);
 
